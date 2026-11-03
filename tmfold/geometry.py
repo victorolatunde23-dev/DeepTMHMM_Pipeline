@@ -7,8 +7,11 @@ Method
    Their length-weighted mean is the starting membrane normal.
 2. A coarse-then-fine grid search over normals within 30 degrees of the start (and its opposite),
    mid-plane offsets and half-thicknesses maximises:  fraction of TM residues inside the slab
-   - 0.5 x fraction of loop residues inside the slab + 0.5 x fraction of loops on their predicted side
+   - 0.5 x (loop residues inside the slab / TM residues) + 0.5 x fraction of loops on their predicted side
    - 0.1 x angle (radians) from the mean segment axis.
+   The loop penalty is counted per residue relative to the TM count, not as a fraction of all loop
+   residues, so a large soluble domain cannot dilute it and inflate the fitted thickness.
+   Ties resolve to the thinnest slab.
 3. The normal points from the inside (cytoplasm) to the outside, so z < 0 is cytoplasmic.
 
 This gives a membrane-oriented model (like OPM/PPM, but driven by the sequence-based topology)
@@ -128,12 +131,14 @@ def fit_membrane(labels: str, ca: dict[int, np.ndarray]) -> Membrane | None:
             in_slab = np.abs(z) <= halves[None, :, None]                      # (O, H, N)
             tm_in = in_slab[..., is_tm].mean(-1)
             loop_in = in_slab[..., is_loop].mean(-1) if is_loop.any() else np.zeros_like(tm_in)
+            loop_pen = in_slab[..., is_loop].sum(-1) / max(int(is_tm.sum()), 1) if is_loop.any() \
+                else np.zeros_like(tm_in)
             side_ok = (np.sign(z[..., is_loop]) == side[is_loop]).mean(-1) if is_loop.any() \
                 else np.zeros((len(offsets), 1))
             # mild prior towards the mean segment axis (0.1 per radian): resolves plateaus and stops a
             # few loop residues from dragging the membrane off the helix bundle axis
             prior = -0.1 * float(np.arccos(np.clip(abs(np.dot(n, n0)), -1, 1)))
-            score = tm_in - 0.5 * loop_in + 0.5 * side_ok + prior
+            score = tm_in - 0.5 * loop_pen + 0.5 * side_ok + prior - 1e-3 * halves[None, :]   # ties -> thinnest slab
             k = np.unravel_index(np.argmax(score), score.shape)
             if best is None or score[k] > best[0] + 1e-9:
                 best = (score[k], n, offsets[k[0]], halves[k[1]], tm_in[k], loop_in[k], side_ok[k[0], 0])

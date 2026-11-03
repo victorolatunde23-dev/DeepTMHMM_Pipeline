@@ -83,6 +83,32 @@ class TestAlign(unittest.TestCase):
         self.assertNotIn(0, m)                     # tag not mapped
 
 
+    def test_tag_on_mid_sequence_construct(self):
+        rng = np.random.default_rng(1)
+        query = "".join(rng.choice(list("ACDEFGHIKLMNPQRSTVWY"), 400))
+        construct = "MGSSHHHHHH" + query[55:200] + query[210:]
+        m = map_positions(construct, query)
+        self.assertTrue(all(i not in m for i in range(10)))       # tag skipped, not forced onto 46-55
+        self.assertEqual(m[10], 56)
+        self.assertEqual(m[10 + 145], 211)
+
+    def test_large_soluble_domain_does_not_inflate_thickness(self):
+        """Type II single-pass protein (PSMA-like): a 24-residue helix, a stalk rising from its end and a
+        700-residue ectodomain. Counting the loop penalty as a fraction of ALL loop residues let the
+        ectodomain dilute it, so the slab grew to its 40 Å limit to swallow stalk residues."""
+        pts = [[3 * np.cos(u), 3 * np.sin(u), -22 - 0.4 * u] for u in range(19)]              # cytoplasmic tail
+        pts += [[2.3 * np.cos(np.radians(100 * k)), 2.3 * np.sin(np.radians(100 * k)), -17.25 + 1.5 * k]
+                for k in range(24)]                                                          # TM helix
+        pts += [[0.5 * k, 0.3 * k, 19 + 1.6 * k] for k in range(13)]                         # stalk
+        rng = np.random.default_rng(2)
+        pts += list(np.array([-6.0, 0, 45]) + rng.normal(scale=7, size=(700, 3)))            # ectodomain
+        labels = "I" * 19 + "M" * 24 + "O" * 713
+        mem = fit_membrane(labels, {i + 1: np.asarray(p, float) for i, p in enumerate(pts)})
+        self.assertLessEqual(2 * mem.half_thickness, 36)
+        self.assertGreater(mem.tm_in_slab, 0.9)
+        self.assertGreater(abs(mem.normal[2]), 0.97)
+
+
 class TestGeometry(unittest.TestCase):
     def test_rotation_to(self):
         for a in (np.array([1.0, 2, 3]), np.array([0, 0, -1.0]), np.array([0, 0, 1.0])):
