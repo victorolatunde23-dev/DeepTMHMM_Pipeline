@@ -4,3 +4,4 @@ biolib_results/
 deeptmhmm_run/
 *.egg-info/
 tmfold_run/
+build/
