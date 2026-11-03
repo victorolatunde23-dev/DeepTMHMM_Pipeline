@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tmfold"
+version = "0.1.0"
+description = "DeepTMHMM membrane topology mapped onto AlphaFold DB, AlphaFold 3, ColabFold or ESMFold structures, with membrane placement and QC"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "requests",
+    "matplotlib",
+    "gemmi",
+    "py3Dmol",
+    "pybiolib",
+]
+
+[project.optional-dependencies]
+esmfold = ["torch", "transformers", "accelerate"]
+test = ["pytest"]
+
+[project.scripts]
+tmfold = "tmfold.cli:main"
+
+[tool.setuptools]
+packages = ["tmfold"]
